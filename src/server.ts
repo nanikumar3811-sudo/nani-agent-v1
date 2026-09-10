@@ -1018,15 +1018,19 @@ app.setErrorHandler(
   async (error, req, reply) => {
     req.log.error(error);
 
-    return reply.code(
-      (error as any).statusCode || 500
-    ).send({
-      error: "NANI request failed",
-      message:
-        process.env.NODE_ENV === "production"
-          ? "Internal server error"
-          : String(error.message || error)
-    });
+    return reply
+      .code((error as any).statusCode || 500)
+      .send({
+        error: "NANI request failed",
+        message:
+          process.env.NODE_ENV === "production"
+            ? "Internal server error"
+            : String(
+                error instanceof Error
+                  ? error.message
+                  : error
+              )
+      });
   }
 );
 
