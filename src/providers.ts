@@ -37,7 +37,7 @@ type ProviderSuccess<T> = {
   provider: 'ALPACA';
 };
 
-type ProviderResult<T> = ProviderSuccess<T> | ProviderFailure;
+export type ProviderResult<T> = ProviderSuccess<T> | ProviderFailure;
 
 export type NormalizedBar = {
   timestamp: string;
