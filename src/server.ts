@@ -21,8 +21,8 @@ const app = Fastify({
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
-function requestId(): string {
-  return crypto.randomUUID();
+function requestIdValue(request: { id: string }): string {
+  return request.id;
 }
 
 function safeError(
@@ -50,12 +50,8 @@ function normalizeSymbol(value: unknown): string | null {
   return symbol;
 }
 
-app.addHook('onRequest', async (request) => {
-  request.headers['x-request-id'] ||= requestId();
-});
-
 app.get('/health', async (request) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
 
   return {
     ok: true,
@@ -72,7 +68,7 @@ app.get('/health', async (request) => {
 });
 
 app.get('/api/dashboard', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
   const data = await dashboard();
 
   try {
@@ -108,7 +104,7 @@ app.get('/api/dashboard', async (request, reply) => {
 });
 
 app.get('/api/state', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
 
   try {
     const state = await latestState();
@@ -134,7 +130,7 @@ app.get('/api/state', async (request, reply) => {
 });
 
 app.get('/api/deep/:symbol', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
   const symbol = normalizeSymbol((request.params as { symbol?: string }).symbol);
 
   if (!symbol) {
@@ -152,7 +148,7 @@ app.get('/api/deep/:symbol', async (request, reply) => {
 });
 
 app.get('/api/options/:symbol', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
   const symbol = normalizeSymbol((request.params as { symbol?: string }).symbol);
 
   if (!symbol) {
@@ -170,7 +166,7 @@ app.get('/api/options/:symbol', async (request, reply) => {
 });
 
 app.get('/api/memory', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
 
   try {
     const items = await recentMemory();
@@ -196,7 +192,7 @@ app.get('/api/memory', async (request, reply) => {
 });
 
 app.post('/api/memory', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
   const body = (request.body || {}) as {
     kind?: unknown;
     content?: unknown;
@@ -237,7 +233,7 @@ app.post('/api/memory', async (request, reply) => {
 });
 
 app.post('/api/command', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
   const body = (request.body || {}) as { text?: unknown };
   const text = String(body.text || '').trim();
 
@@ -308,7 +304,7 @@ app.post('/api/command', async (request, reply) => {
 });
 
 app.all('/api/execution/*', async (request, reply) => {
-  const id = String(request.headers['x-request-id']);
+  const id = request.id; 
 
   return reply.code(403).send(
     safeError(
@@ -320,7 +316,7 @@ app.all('/api/execution/*', async (request, reply) => {
 });
 
 app.setErrorHandler((error, request, reply) => {
-  const id = String(request.headers['x-request-id'] || requestId());
+  const id = request.id;
 
   request.log.error(
     {
