@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: nani-agent-v1-docker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: LIVE_TRADING
+        value: "false"
+      - key: MAX_PREMIUM_USD
+        value: "500"
+      - key: MAX_TRADE_RISK_USD
+        value: "200"
+      - key: DATABASE_URL
+        sync: false
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_API_SECRET
+        sync: false
+      - key: FINNHUB_API_KEY
+        sync: false
