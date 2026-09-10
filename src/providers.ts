@@ -1,4 +1,5 @@
-const BASE = process.env.ALPACA_DATA_BASE_URL || 'https://data.alpaca.markets';
+const BASE =
+  process.env.ALPACA_DATA_BASE_URL || 'https://data.alpaca.markets';
 
 export type DataStatus =
   | 'LIVE'
@@ -37,6 +38,12 @@ type ProviderSuccess<T> = {
   provider: 'ALPACA';
 };
 
+/*
+  Important:
+  This MUST be exported because src/engine.ts imports it as:
+
+  import { type ProviderResult } from './providers.js';
+*/
 export type ProviderResult<T> = ProviderSuccess<T> | ProviderFailure;
 
 export type NormalizedBar = {
@@ -70,106 +77,100 @@ function getHeaders(): Record<string, string> {
   };
 }
 
-function safeMessage(status: number): string {
-  if (status === 401 || status === 403) {
-    return 'Market-data provider authorization is unavailable.';
-  }
-
-  if (status === 429) {
-    return 'Market-data provider rate limit reached. Please refresh shortly.';
-  }
-
-  if (status >= 500) {
-    return 'Market-data provider is temporarily unavailable.';
-  }
-
-  return 'Market-data provider request failed.';
+function providerFailure(
+  status: DataStatus,
+  reasonCode: ProviderReasonCode,
+  message: string,
+  fetchedAt: string,
+): ProviderFailure {
+  return {
+    ok: false,
+    status,
+    reasonCode,
+    message,
+    fetchedAt,
+    provider: 'ALPACA',
+  };
 }
 
 function classifyError(error: unknown, fetchedAt: string): ProviderFailure {
   const message = error instanceof Error ? error.message : String(error);
 
   if (message === 'MISSING_PROVIDER_CONFIG') {
-    return {
-      ok: false,
-      status: 'UNAVAILABLE',
-      reasonCode: 'MISSING_PROVIDER_CONFIG',
-      message: 'Market-data provider is not configured.',
+    return providerFailure(
+      'UNAVAILABLE',
+      'MISSING_PROVIDER_CONFIG',
+      'Market-data provider is not configured.',
       fetchedAt,
-      provider: 'ALPACA',
-    };
+    );
   }
 
   if (message === 'PROVIDER_TIMEOUT') {
-    return {
-      ok: false,
-      status: 'UNAVAILABLE',
-      reasonCode: 'PROVIDER_TIMEOUT',
-      message: 'Market-data provider timed out. Please refresh shortly.',
+    return providerFailure(
+      'UNAVAILABLE',
+      'PROVIDER_TIMEOUT',
+      'Market-data provider timed out. Please refresh shortly.',
       fetchedAt,
-      provider: 'ALPACA',
-    };
+    );
   }
 
-  if (message.startsWith('PROVIDER_HTTP_401') || message.startsWith('PROVIDER_HTTP_403')) {
-    return {
-      ok: false,
-      status: 'UNAVAILABLE',
-      reasonCode: 'PROVIDER_AUTH_FAILED',
-      message: 'Market-data provider authorization is unavailable.',
+  if (
+    message.startsWith('PROVIDER_HTTP_401') ||
+    message.startsWith('PROVIDER_HTTP_403')
+  ) {
+    return providerFailure(
+      'UNAVAILABLE',
+      'PROVIDER_AUTH_FAILED',
+      'Market-data provider authorization is unavailable.',
       fetchedAt,
-      provider: 'ALPACA',
-    };
+    );
   }
 
   if (message.startsWith('PROVIDER_HTTP_429')) {
-    return {
-      ok: false,
-      status: 'RATE_LIMITED',
-      reasonCode: 'PROVIDER_RATE_LIMITED',
-      message: 'Market-data provider rate limit reached. Please refresh shortly.',
+    return providerFailure(
+      'RATE_LIMITED',
+      'PROVIDER_RATE_LIMITED',
+      'Market-data provider rate limit reached. Please refresh shortly.',
       fetchedAt,
-      provider: 'ALPACA',
-    };
+    );
   }
 
   if (message === 'PROVIDER_INVALID_RESPONSE') {
-    return {
-      ok: false,
-      status: 'INVALID',
-      reasonCode: 'PROVIDER_INVALID_RESPONSE',
-      message: 'Market-data provider returned an invalid response.',
+    return providerFailure(
+      'INVALID',
+      'PROVIDER_INVALID_RESPONSE',
+      'Market-data provider returned an invalid response.',
       fetchedAt,
-      provider: 'ALPACA',
-    };
+    );
   }
 
   if (message.startsWith('PROVIDER_HTTP_')) {
-    return {
-      ok: false,
-      status: 'UNAVAILABLE',
-      reasonCode: 'PROVIDER_HTTP_ERROR',
-      message: 'Market-data provider request failed.',
+    return providerFailure(
+      'UNAVAILABLE',
+      'PROVIDER_HTTP_ERROR',
+      'Market-data provider request failed.',
       fetchedAt,
-      provider: 'ALPACA',
-    };
+    );
   }
 
-  return {
-    ok: false,
-    status: 'UNAVAILABLE',
-    reasonCode: 'PROVIDER_NETWORK_ERROR',
-    message: 'Market-data provider could not be reached.',
+  return providerFailure(
+    'UNAVAILABLE',
+    'PROVIDER_NETWORK_ERROR',
+    'Market-data provider could not be reached.',
     fetchedAt,
-    provider: 'ALPACA',
-  };
+  );
 }
 
 async function request<T>(url: string): Promise<ProviderResult<T>> {
   const fetchedAt = new Date().toISOString();
-  const timeoutMs = Number(process.env.MARKET_DATA_TIMEOUT_MS || 10000);
+  const parsedTimeout = Number(process.env.MARKET_DATA_TIMEOUT_MS || 10000);
+  const timeoutMs =
+    Number.isFinite(parsedTimeout) && parsedTimeout > 0
+      ? parsedTimeout
+      : 10000;
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
@@ -178,6 +179,7 @@ async function request<T>(url: string): Promise<ProviderResult<T>> {
     });
 
     const raw = await response.text();
+
     let data: T;
 
     try {
@@ -204,7 +206,7 @@ async function request<T>(url: string): Promise<ProviderResult<T>> {
 
     return classifyError(error, fetchedAt);
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timer);
   }
 }
 
@@ -219,9 +221,25 @@ function toTimestamp(value: unknown): string | null {
   }
 
   const date = new Date(value);
+
   return Number.isNaN(date.valueOf()) ? null : date.toISOString();
 }
 
+/*
+  Supports both likely Alpaca bar payload shapes:
+
+  {
+    "bars": [ ... ]
+  }
+
+  and:
+
+  {
+    "bars": {
+      "SPY": [ ... ]
+    }
+  }
+*/
 export function extractRawBars(payload: unknown, symbol: string): unknown[] {
   const value = payload as {
     bars?: unknown[] | Record<string, unknown[]>;
@@ -242,11 +260,18 @@ export function extractRawBars(payload: unknown, symbol: string): unknown[] {
   return [];
 }
 
-export function normalizeBars(payload: unknown, symbol: string): NormalizedBar[] {
+export function normalizeBars(
+  payload: unknown,
+  symbol: string,
+): NormalizedBar[] {
   const rawBars = extractRawBars(payload, symbol);
   const normalized: NormalizedBar[] = [];
 
   for (const rawBar of rawBars) {
+    if (!rawBar || typeof rawBar !== 'object') {
+      continue;
+    }
+
     const bar = rawBar as Record<string, unknown>;
 
     const timestamp = toTimestamp(bar.t ?? bar.timestamp);
@@ -277,21 +302,21 @@ export function normalizeBars(payload: unknown, symbol: string): NormalizedBar[]
     });
   }
 
-  const uniqueByTimestamp = new Map<string, NormalizedBar>();
+  const deduplicated = new Map<string, NormalizedBar>();
 
   for (const bar of normalized) {
-    uniqueByTimestamp.set(bar.timestamp, bar);
+    deduplicated.set(bar.timestamp, bar);
   }
 
-  return [...uniqueByTimestamp.values()].sort(
+  return [...deduplicated.values()].sort(
     (left, right) =>
       new Date(left.timestamp).valueOf() - new Date(right.timestamp).valueOf(),
   );
 }
 
-export async function quote(symbol: string): Promise<
-  ProviderResult<QuoteData>
-> {
+export async function quote(
+  symbol: string,
+): Promise<ProviderResult<QuoteData>> {
   const result = await request<Record<string, unknown>>(
     `${BASE}/v2/stocks/${encodeURIComponent(symbol)}/quotes/latest`,
   );
@@ -305,26 +330,21 @@ export async function quote(symbol: string): Promise<
 
   const bid = finite(quoteValue.bp ?? quoteValue.bid);
   const ask = finite(quoteValue.ap ?? quoteValue.ask);
-
   const price = ask ?? bid;
   const quotedAt = toTimestamp(quoteValue.t ?? quoteValue.timestamp);
 
   if (price === null) {
-    return {
-      ok: false,
-      status: 'INVALID',
-      reasonCode: 'PROVIDER_INVALID_RESPONSE',
-      message: 'Market-data provider did not return a valid quote.',
-      fetchedAt: result.fetchedAt,
-      provider: 'ALPACA',
-    };
+    return providerFailure(
+      'INVALID',
+      'PROVIDER_INVALID_RESPONSE',
+      'Market-data provider did not return a valid quote.',
+      result.fetchedAt,
+    );
   }
 
   return {
     ok: true,
     status: 'LIVE',
-    fetchedAt: result.fetchedAt,
-    provider: 'ALPACA',
     data: {
       symbol,
       price,
@@ -332,6 +352,8 @@ export async function quote(symbol: string): Promise<
       ask,
       quotedAt,
     },
+    fetchedAt: result.fetchedAt,
+    provider: 'ALPACA',
   };
 }
 
@@ -343,8 +365,11 @@ export async function bars(
 
   const result = await request<unknown>(
     `${BASE}/v2/stocks/${encodeURIComponent(symbol)}/bars` +
-      `?timeframe=1Day&start=${encodeURIComponent(start.toISOString())}` +
-      `&end=${encodeURIComponent(end.toISOString())}&limit=100&feed=iex`,
+      `?timeframe=1Day` +
+      `&start=${encodeURIComponent(start.toISOString())}` +
+      `&end=${encodeURIComponent(end.toISOString())}` +
+      `&limit=100` +
+      `&feed=iex`,
   );
 
   if (!result.ok) {
@@ -354,14 +379,12 @@ export async function bars(
   const normalized = normalizeBars(result.data, symbol);
 
   if (normalized.length === 0) {
-    return {
-      ok: false,
-      status: 'INVALID',
-      reasonCode: 'INSUFFICIENT_BARS',
-      message: 'Market-data provider did not return valid historical bars.',
-      fetchedAt: result.fetchedAt,
-      provider: 'ALPACA',
-    };
+    return providerFailure(
+      'INVALID',
+      'INSUFFICIENT_BARS',
+      'Market-data provider did not return valid historical bars.',
+      result.fetchedAt,
+    );
   }
 
   return {
@@ -373,25 +396,32 @@ export async function bars(
   };
 }
 
-export async function options(symbol: string): Promise<ProviderResult<unknown>> {
+export async function options(
+  symbol: string,
+): Promise<ProviderResult<unknown>> {
   const result = await request<unknown>(
     `${BASE}/v1beta1/options/snapshots/${encodeURIComponent(symbol)}` +
       '?feed=indicative&limit=100',
   );
 
-  if (!result.ok) {
-    return {
-      ...result,
-      reasonCode:
-        result.reasonCode === 'MISSING_PROVIDER_CONFIG'
-          ? 'MISSING_PROVIDER_CONFIG'
-          : 'OPTIONS_DATA_UNAVAILABLE',
-      message:
-        result.status === 'RATE_LIMITED'
-          ? result.message
-          : 'Options research data is unavailable.',
-    };
+  if (result.ok) {
+    return result;
   }
 
-  return result;
+  return {
+    ok: false,
+    status: result.status,
+    reasonCode:
+      result.reasonCode === 'MISSING_PROVIDER_CONFIG'
+        ? 'MISSING_PROVIDER_CONFIG'
+        : result.status === 'RATE_LIMITED'
+          ? 'PROVIDER_RATE_LIMITED'
+          : 'OPTIONS_DATA_UNAVAILABLE',
+    message:
+      result.status === 'RATE_LIMITED'
+        ? result.message
+        : 'Options research data is unavailable.',
+    fetchedAt: result.fetchedAt,
+    provider: 'ALPACA',
+  };
 }
