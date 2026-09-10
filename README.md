@@ -1,10 +1,23 @@
 # NANI PRO X V3
-Daily-use mobile market intelligence command center.
 
-Safety: LIVE_TRADING=false. No order endpoints. No execution. Defined-risk research only. Missing provider data fails closed.
+NANI PRO X is an iPhone-first U.S. market intelligence dashboard for SPY/QQQ context, options research, PostgreSQL-backed memory, and future paper-trading workflows.
 
-Providers: Alpaca market data/options; Finnhub can be added for macro/news. PostgreSQL stores NANI state and memory.
+## Safety
 
-Deploy: replace repo contents, commit to main, Render auto-deploys. Set DATABASE_URL, ALPACA_API_KEY and ALPACA_API_SECRET in Render.
+- `LIVE_TRADING=false` is required.
+- No broker order execution.
+- No live trade placement.
+- Defined-risk options research only.
+- No naked or undefined-risk options.
+- `MAX_PREMIUM_USD` and `MAX_TRADE_RISK_USD` are enforced configuration guardrails.
+- Missing, invalid, delayed, rate-limited, or unavailable market data results in `NO_TRADE`.
+- NANI never fabricates prices, technical indicators, option contracts, news, or market conditions.
 
-Local: npm install && npm run build && npm start
+## Architecture
+
+```text
+iPhone Safari
+  → React/Vite dashboard
+  → Fastify API
+  → Alpaca provider adapter
+  → PostgreSQL memory/state
