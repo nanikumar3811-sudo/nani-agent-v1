@@ -1,8 +1,169 @@
 import {quote,bars,options} from './providers.js';
-const n=(x:any)=>{const v=Number(x);return Number.isFinite(v)?v:null};
-function ema(a:number[],p:number){if(!a.length)return null;let e=a[0],k=2/(p+1);for(let i=1;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
-function atr(b:any[]){if(b.length<15)return null;let x:number[]=[];for(let i=1;i<b.length;i++){let h=n(b[i].h),l=n(b[i].l),pc=n(b[i-1].c);if(h!=null&&l!=null&&pc!=null)x.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)))}return x.length?x.slice(-14).reduce((a,v)=>a+v,0)/Math.min(14,x.length):null}
-function tech(b:any[],q:any){const c=b.map(x=>n(x.c)).filter((x):x is number=>x!=null),p=q.price??c.at(-1)??null,e5=ema(c,5),e20=ema(c,20),e50=ema(c,50),h20=Math.max(...b.slice(-20).map(x=>n(x.h)??-Infinity)),l20=Math.min(...b.slice(-20).map(x=>n(x.l)??Infinity));const trend=p!=null&&e5!=null&&e20!=null?(p>e5&&e5>e20?'BULLISH':p<e5&&e5<e20?'BEARISH':'MIXED'):'UNKNOWN';return {price:p,ema5:e5,ema20:e20,ema50:e50,atr14:atr(b),high20:Number.isFinite(h20)?h20:null,low20:Number.isFinite(l20)?l20:null,trend}}
-export async function dashboard(){const [sq,qq,sh,qh]=await Promise.all([quote('SPY'),quote('QQQ'),bars('SPY'),bars('QQQ')]);const st=tech(sh.bars?.SPY||[],sq),qt=tech(qh.bars?.QQQ||[],qq);const dataState=sq.status==='LIVE'&&qq.status==='LIVE'?'LIVE':'UNAVAILABLE';const regime=st.trend==='BULLISH'&&qt.trend==='BULLISH'?'RISK_ON':st.trend==='BEARISH'&&qt.trend==='BEARISH'?'RISK_OFF':'MIXED';const reasons:string[]=[];if(dataState!=='LIVE')reasons.push('Validated live market data is unavailable.');if(regime==='MIXED')reasons.push('SPY and QQQ are not aligned.');return {generatedAt:new Date().toISOString(),mode:'LIVE',actionSafety:{executionAllowed:false,liveTrading:false,optionsExecutionBlocked:true},dataIntegrity:{state:dataState,provider:'ALPACA'},marketPulse:{regime,spy:{quote:sq,technical:st},qqq:{quote:qq,technical:qt}},finalDecision:{action:dataState==='LIVE'&&regime!=='MIXED'?'WAIT_FOR_TRIGGER':'NO_TRADE',bestOpportunity:null,bestTrigger:null},reasons,guardrails:{maxPremiumUsd:Number(process.env.MAX_PREMIUM_USD||500),maxTradeRiskUsd:Number(process.env.MAX_TRADE_RISK_USD||200),definedRiskOnly:true}}}
-export async function deep(symbol:string){const [q,b]=await Promise.all([quote(symbol),bars(symbol)]);return {symbol,quote:q,technical:tech(b.bars?.[symbol]||[],q),generatedAt:new Date().toISOString()}}
-export async function optionContext(symbol:string){return {symbol,underlying:await quote(symbol),snapshots:await options(symbol),executionBlocked:true,rules:['Defined-risk only','No naked options','No execution','Reject stale/unavailable underlying data']}}
+
+const n=(x:any)=>{
+  const v=Number(x);
+  return Number.isFinite(v)?v:null;
+};
+
+function ema(a:number[],p:number){
+  if(!a.length)return null;
+  let e=a[0],k=2/(p+1);
+  for(let i=1;i<a.length;i++)e=a[i]*k+e*(1-k);
+  return e;
+}
+
+function atr(b:any[]){
+  if(b.length<15)return null;
+  let x:number[]=[];
+  for(let i=1;i<b.length;i++){
+    let h=n(b[i].h),l=n(b[i].l),pc=n(b[i-1].c);
+    if(h!=null&&l!=null&&pc!=null){
+      x.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
+    }
+  }
+  return x.length
+    ?x.slice(-14).reduce((a,v)=>a+v,0)/Math.min(14,x.length)
+    :null;
+}
+
+function tech(b:any[],q:any){
+  const c=b
+    .map(x=>n(x.c))
+    .filter((x):x is number=>x!=null);
+
+  const p=q.price??c.at(-1)??null;
+  const e5=ema(c,5);
+  const e20=ema(c,20);
+  const e50=ema(c,50);
+
+  const h20=Math.max(
+    ...b.slice(-20).map(x=>n(x.h)??-Infinity)
+  );
+
+  const l20=Math.min(
+    ...b.slice(-20).map(x=>n(x.l)??Infinity)
+  );
+
+  const trend=
+    p!=null&&e5!=null&&e20!=null
+      ?(
+          p>e5&&e5>e20
+            ?'BULLISH'
+            :p<e5&&e5<e20
+              ?'BEARISH'
+              :'MIXED'
+        )
+      :'UNKNOWN';
+
+  return {
+    price:p,
+    ema5:e5,
+    ema20:e20,
+    ema50:e50,
+    atr14:atr(b),
+    high20:Number.isFinite(h20)?h20:null,
+    low20:Number.isFinite(l20)?l20:null,
+    trend
+  };
+}
+
+export async function dashboard(){
+  const [sq,qq,sh,qh]=await Promise.all([
+    quote('SPY'),
+    quote('QQQ'),
+    bars('SPY'),
+    bars('QQQ')
+  ]);
+
+  const st=tech(sh.bars?.SPY||[],sq);
+  const qt=tech(qh.bars?.QQQ||[],qq);
+
+  const dataState=
+    sq.status==='LIVE'&&qq.status==='LIVE'
+      ?'LIVE'
+      :'UNAVAILABLE';
+
+  const regime=
+    st.trend==='BULLISH'&&qt.trend==='BULLISH'
+      ?'RISK_ON'
+      :st.trend==='BEARISH'&&qt.trend==='BEARISH'
+        ?'RISK_OFF'
+        :'MIXED';
+
+  const reasons:string[]=[];
+
+  if(dataState!=='LIVE'){
+    reasons.push('Validated live market data is unavailable.');
+  }
+
+  if(regime==='MIXED'){
+    reasons.push('SPY and QQQ are not aligned.');
+  }
+
+  return {
+    generatedAt:new Date().toISOString(),
+    mode:'LIVE',
+    actionSafety:{
+      executionAllowed:false,
+      liveTrading:false,
+      optionsExecutionBlocked:true
+    },
+    dataIntegrity:{
+      state:dataState,
+      provider:'ALPACA'
+    },
+    marketPulse:{
+      regime,
+      spy:{
+        quote:sq,
+        technical:st
+      },
+      qqq:{
+        quote:qq,
+        technical:qt
+      }
+    },
+    finalDecision:{
+      action:dataState==='LIVE'&&regime!=='MIXED'
+        ?'WAIT_FOR_TRIGGER'
+        :'NO_TRADE',
+      bestOpportunity:null,
+      bestTrigger:null
+    },
+    reasons,
+    guardrails:{
+      maxPremiumUsd:Number(process.env.MAX_PREMIUM_USD||500),
+      maxTradeRiskUsd:Number(process.env.MAX_TRADE_RISK_USD||200),
+      definedRiskOnly:true
+    }
+  };
+}
+
+export async function deep(symbol:string){
+  const [q,b]=await Promise.all([
+    quote(symbol),
+    bars(symbol)
+  ]);
+
+  return {
+    symbol,
+    quote:q,
+    technical:tech(b.bars?.[symbol]||[],q),
+    generatedAt:new Date().toISOString()
+  };
+}
+
+export async function optionContext(symbol:string){
+  return {
+    symbol,
+    underlying:await quote(symbol),
+    snapshots:await options(symbol),
+    executionBlocked:true,
+    rules:[
+      'Defined-risk only',
+      'No naked options',
+      'No execution',
+      'Reject stale/unavailable underlying data'
+    ]
+  };
+}
