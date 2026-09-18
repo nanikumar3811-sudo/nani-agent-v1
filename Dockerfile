@@ -11,4 +11,4 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 EXPOSE 10000
-CMD ["node","dist/src/server.js"]
+CMD ["node","dist/src/foundation-server.js"]
