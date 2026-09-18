@@ -1,0 +1,19 @@
+name: Phase 1 checks
+on:
+  push:
+    branches: ["feat/nani-pro-x-phase1"]
+  pull_request:
+    branches: ["main"]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
