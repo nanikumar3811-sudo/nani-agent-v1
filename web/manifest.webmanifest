@@ -1,0 +1,10 @@
+{
+  "name":"NANI PRO X",
+  "short_name":"NANI",
+  "start_url":"/dashboard",
+  "display":"standalone",
+  "background_color":"#070a11",
+  "theme_color":"#070a11",
+  "description":"Evidence-first market intelligence and paper-trading research terminal.",
+  "icons":[]
+}
