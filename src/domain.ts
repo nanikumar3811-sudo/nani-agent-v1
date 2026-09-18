@@ -18,6 +18,7 @@ export type Quote = {
   volume: number | null;
   relativeVolume: number | null;
   marketTimestamp: string | null;
+  status: DataStatus;
 };
 
 export type TechnicalSnapshot = {
