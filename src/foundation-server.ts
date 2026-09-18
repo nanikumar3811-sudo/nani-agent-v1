@@ -20,7 +20,7 @@ app.get('/health', async (request) => ({
 }));
 
 app.get('/ready', async (_request, reply) => {
-  const connected = await dbHealth();
+  const connected = process.env.DATABASE_URL ? await dbHealth() : false;
   return reply.code(connected || !process.env.DATABASE_URL ? 200 : 503).send({
     ok: connected || !process.env.DATABASE_URL, databaseConfigured: Boolean(process.env.DATABASE_URL),
     databaseConnected: connected, dataMode: process.env.DATA_MODE === 'REAL' ? 'UNAVAILABLE' : 'DEMO'
@@ -69,6 +69,6 @@ app.all('/api/execution/*', async (_request, reply) => reply.code(403).send({ok:
 app.register(stat, { root: path.join(dir, '../../dist/web'), prefix:'/' });
 app.setNotFoundHandler((request, reply) => request.raw.url?.startsWith('/api/') ? reply.code(404).send({ok:false,error:{code:'NOT_FOUND',message:'API route not found.'}}) : reply.sendFile('index.html'));
 
-await initDb();
+if (process.env.DATABASE_URL) await initDb();
 await app.listen({host:process.env.HOST || '0.0.0.0',port:Number(process.env.PORT || 10000)});
 process.on('SIGTERM', async () => { await app.close(); await closeDb(); });
