@@ -54,7 +54,8 @@ export function demoInstrument(symbol: string): MarketInstrument {
     change: last.close - previous,
     changePercent: ((last.close - previous) / previous) * 100,
     volume: last.volume, relativeVolume: technicalSnapshot(candles).relativeVolume,
-    marketTimestamp: last.timestamp
+    marketTimestamp: last.timestamp,
+    status: 'DEMO'
   };
   const receivedAt = new Date().toISOString();
   return {
