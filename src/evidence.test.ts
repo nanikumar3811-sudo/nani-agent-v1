@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { evidenceFor } from './evidence.js';
+import { demoInstrument } from './demo-provider.js';
+import { marketRegime } from './regime.js';
+const instruments = ['SPY','QQQ','IWM','VIX'].map(demoInstrument);
+const regime = marketRegime(instruments);
+const packet = evidenceFor('SPY', demoInstrument('SPY'), regime);
+assert.ok(packet.components.length >= 8);
+assert.equal(packet.components.find(c => c.name === 'Options Flow')?.status, 'UNAVAILABLE');
+assert.ok(['DEVELOPING','WATCH','TRADE-READY RESEARCH','NO_TRADE'].includes(packet.status));
