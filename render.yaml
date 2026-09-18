@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: nani-agent-v1-docker
+    name: nani-pro-x
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -15,6 +15,8 @@ services:
         value: 10000
       - key: LIVE_TRADING
         value: "false"
+      - key: DATA_MODE
+        value: DEMO
       - key: MAX_PREMIUM_USD
         value: "500"
       - key: MAX_TRADE_RISK_USD
@@ -24,6 +26,4 @@ services:
       - key: ALPACA_API_KEY
         sync: false
       - key: ALPACA_API_SECRET
-        sync: false
-      - key: FINNHUB_API_KEY
         sync: false
