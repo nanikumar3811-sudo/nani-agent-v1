@@ -10,6 +10,7 @@ type UiState =
   | "STALE"
   | "RATE_LIMITED"
   | "UNAVAILABLE"
+  | "DEMO"
   | "ERROR";
 
 const fmt = (value: any, digits = 2) => {
@@ -99,6 +100,7 @@ function stateFromData(data: any): UiState {
   if (state === "STALE") return "STALE";
   if (state === "RATE_LIMITED") return "RATE_LIMITED";
   if (state === "UNAVAILABLE") return "UNAVAILABLE";
+  if (state === "DEMO") return "DEMO";
 
   return data ? "SUCCESS" : "IDLE";
 }
