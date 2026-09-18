@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
-    "start": "node dist/src/server.js",
-    "dev": "tsx src/server.ts",
+    "start": "node dist/src/foundation-server.js",
+    "dev": "tsx src/foundation-server.ts",
     "test": "tsx src/selftest.ts && tsx src/technical.test.ts && tsx src/regime.test.ts && tsx src/evidence.test.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
