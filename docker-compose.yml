@@ -2,7 +2,7 @@ services:
   nani:
     build: .
     ports:
-      - "8088:8088"
+      - "10000:10000"
     env_file:
       - .env
     volumes:
