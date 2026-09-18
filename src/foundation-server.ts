@@ -16,7 +16,7 @@ function safeSymbol(value: unknown): string | null {
 app.get('/health', async (request) => ({
   ok: true, service: 'nani-pro-x', status: 'ok', liveTrading: false, executionAllowed: false,
   dataMode: process.env.DATA_MODE === 'REAL' ? 'UNAVAILABLE' : 'DEMO',
-  database: { connected: await dbHealth() }, requestId: request.id, timestamp: new Date().toISOString()
+  database: { connected: process.env.DATABASE_URL ? await dbHealth() : false }, requestId: request.id, timestamp: new Date().toISOString()
 }));
 
 app.get('/ready', async (_request, reply) => {
