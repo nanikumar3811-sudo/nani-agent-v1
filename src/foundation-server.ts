@@ -61,7 +61,35 @@ app.get('/api/deep/:symbol', async (request, reply) => {
   const instrument = state.instruments.find(i => i.symbol === symbol);
   if (!instrument) return reply.code(404).send({ok:false,error:{code:'SYMBOL_UNAVAILABLE',message:'Symbol is not in the Phase 1 demo universe.'}});
   const evidence = state.evidence.find(e => e.symbol === symbol) ?? null;
-  return { ok:true, symbol, generatedAt:state.generatedAt, dataStatus:instrument.status, instrument, evidence, executionAllowed:false, liveTrading:false };
+  return { ok:true, symbol, generatedAt:state.generatedAt, dataStatus:instrument.status, dataState:instrument.status, quote: { ...instrument.quote, quotedAt:instrument.quote.marketTimestamp, fetchedAt:instrument.receivedAt }, technical: { ...instrument.technical, barsAvailable: instrument.technical.bars, high20: instrument.technical.resistance, low20: instrument.technical.support, ema5: instrument.technical.ema9, ema20: instrument.technical.ema21 }, instrument, evidence, executionAllowed:false, liveTrading:false };
+});
+
+
+
+app.get('/api/options/:symbol', async (request, reply) => {
+  const symbol = safeSymbol((request.params as {symbol?: string}).symbol);
+  if (!symbol) return reply.code(400).send({ok:false,error:{code:'INVALID_SYMBOL',message:'A valid symbol is required.'}});
+  const state = await foundationState();
+  const instrument = state.instruments.find(i => i.symbol === symbol);
+  if (!instrument) return reply.code(404).send({ok:false,error:{code:'SYMBOL_UNAVAILABLE',message:'Symbol is not in the Phase 1 demo universe.'}});
+  return { ok:true, symbol, generatedAt:state.generatedAt, dataState: instrument.status, underlying: { price: instrument.quote.price, status: instrument.status, source: instrument.source, provider: instrument.provider }, snapshots:null, executionBlocked:true, finalDecision:{action:'NO_TRADE',reasonCodes:['OPTIONS_NOT_CONNECTED']}, rules:['Defined-risk only','No naked options','No execution','No live trade placement'], warnings:['Options trade-level data is not connected in Phase 1.'] };
+});
+
+app.get('/api/memory', async (_request, reply) => {
+  if (!process.env.DATABASE_URL) return reply.send({ok:true,dataState:'UNAVAILABLE',items:[],reason:'PostgreSQL is not configured; demo mode does not persist memory.'});
+  const { recentMemory } = await import('./db.js');
+  return reply.send({ok:true,dataState:'LIVE',items:await recentMemory()});
+});
+
+app.post('/api/command', async (request, reply) => {
+  const body = (request.body ?? {}) as { text?: unknown };
+  const question = String(body.text ?? '').trim();
+  if (!question) return reply.code(400).send({ok:false,error:{code:'COMMAND_TEXT_REQUIRED',message:'Enter a question.'}});
+  const state = await foundationState();
+  const answer = state.mode === 'DEMO'
+    ? 'DEMO DATA: NANI can explain the deterministic technical/regime evidence, but this dataset is not live market data. Options flow, news, catalysts and other unavailable evidence remain explicitly unverified.'
+    : 'NANI cannot validate current market data. NO_TRADE.';
+  return {ok:true,answer,data: {dataIntegrity:{state:state.mode},marketPulse:{regime:state.regime.state}},memory:{saved:false}};
 });
 
 app.all('/api/execution/*', async (_request, reply) => reply.code(403).send({ok:false,error:{code:'LIVE_TRADING_DISABLED',message:'Live trading is permanently disabled.'}}));
