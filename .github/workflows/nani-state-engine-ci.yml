@@ -1,0 +1,59 @@
+name: NANI State Engine CI
+
+on:
+  push:
+    branches:
+      - feat/nani-state-evidence-engine
+  pull_request:
+    branches:
+      - feat/nani-pro-x-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nani-state-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIVE_TRADING: "false"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nani_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nani_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nani_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run self-tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
