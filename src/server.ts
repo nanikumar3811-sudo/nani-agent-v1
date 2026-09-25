@@ -10,7 +10,14 @@ import {
   memory,
   recentMemory,
   saveState,
+  saveEvidence,
+  evidenceFor,
+  latestLivingState,
+  saveLivingState,
+  livingStates,
+  recordAlert,
 } from './db.js';
+import { buildLivingState, shouldNotify, type EvidenceFact, type DecisionState } from './state-engine.js';
 import { dashboard, deep, optionContext } from './engine.js';
 
 const app = Fastify({
@@ -163,6 +170,61 @@ app.get('/api/options/:symbol', async (request, reply) => {
     ...(await optionContext(symbol)),
     requestId: id,
   };
+});
+
+app.get('/api/brain', async (request, reply) => {
+  const id = request.id;
+  const states = await livingStates();
+  reply.header('x-request-id', id);
+  return { ok: true, requestId: id, states, executionAllowed: false };
+});
+
+app.get('/api/brain/:subject', async (request, reply) => {
+  const id = request.id;
+  const subject = decodeURIComponent(String((request.params as any).subject || '')).trim();
+  if (!subject) return reply.code(400).send(safeError(id,'SUBJECT_REQUIRED','Subject is required.'));
+  const [state,evidence] = await Promise.all([latestLivingState(subject), evidenceFor(subject)]);
+  return { ok:true, requestId:id, state, evidence, executionAllowed:false };
+});
+
+app.post('/api/evidence', async (request, reply) => {
+  const id=request.id;
+  const body=(request.body||{}) as Partial<EvidenceFact>;
+  const subject=String(body.subject||'').trim();
+  const field=String(body.field||'').trim();
+  const sourceUrl=String(body.sourceUrl||'').trim();
+  const sourceName=String(body.sourceName||'').trim();
+  const kind=body.kind==='SHOPPING'?'SHOPPING':'MARKET';
+  const quality=body.quality;
+  if(!subject||!field||!sourceUrl||!sourceName||!['PRIMARY','TRUSTED_SECONDARY','DISCOVERY'].includes(String(quality))){
+    return reply.code(400).send(safeError(id,'INVALID_EVIDENCE','Verified evidence requires subject, field, source URL/name and source quality.'));
+  }
+  const observedAt=String(body.observedAt||new Date().toISOString());
+  const verifiedAt=String(body.verifiedAt||new Date().toISOString());
+  if(Number.isNaN(Date.parse(observedAt))||Number.isNaN(Date.parse(verifiedAt))){
+    return reply.code(400).send(safeError(id,'INVALID_TIMESTAMP','Evidence timestamps must be valid.'));
+  }
+  const item:EvidenceFact={subject,kind,field,value:body.value,sourceUrl,sourceName,quality:quality as any,observedAt,verifiedAt,expiresAt:body.expiresAt||null};
+  const saved=await saveEvidence(item);
+  return {ok:true,requestId:id,saved};
+});
+
+app.post('/api/brain/evaluate', async (request, reply) => {
+  const id=request.id;
+  const body=(request.body||{}) as {subject?:string;kind?:'MARKET'|'SHOPPING';decision?:DecisionState;reason?:string;nextCondition?:string};
+  const subject=String(body.subject||'').trim();
+  if(!subject)return reply.code(400).send(safeError(id,'SUBJECT_REQUIRED','Subject is required.'));
+  const previous=await latestLivingState(subject);
+  const rows=await evidenceFor(subject,100);
+  const facts:EvidenceFact[]=rows.map((x:any)=>({subject:x.subject,kind:x.kind,field:x.field,value:x.value,sourceUrl:x.source_url,sourceName:x.source_name,quality:x.quality,observedAt:new Date(x.observed_at).toISOString(),verifiedAt:new Date(x.verified_at).toISOString(),expiresAt:x.expires_at?new Date(x.expires_at).toISOString():null}));
+  const latestByField=new Map<string,EvidenceFact>();
+  for(const fact of facts){if(!latestByField.has(fact.field))latestByField.set(fact.field,fact)}
+  const state=buildLivingState({subject,kind:body.kind||facts[0]?.kind||'MARKET',facts:[...latestByField.values()],previousFacts:previous?.facts||null,previousDecision:previous?.decision||null,decision:body.decision,reason:body.reason,nextCondition:body.nextCondition});
+  await saveLivingState(state);
+  const notify=shouldNotify(state,previous?.decision||null);
+  const fingerprint=subject+'|'+state.decision+'|'+state.deltas.filter(d=>d.changed).map(d=>d.field+':'+JSON.stringify(d.current)).sort().join(',');
+  const alert=notify?await recordAlert(subject,fingerprint,{decision:state.decision,deltas:state.deltas,reason:state.reason,nextCondition:state.nextCondition}):null;
+  return {ok:true,requestId:id,state,notification:{needed:notify,new:Boolean(alert)},executionAllowed:false};
 });
 
 app.get('/api/memory', async (request, reply) => {
