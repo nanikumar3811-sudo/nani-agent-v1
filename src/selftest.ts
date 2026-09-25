@@ -4,6 +4,7 @@ import {
 } from './providers.js';
 import { dashboard } from './engine.js';
 import { closeDb, health, initDb } from './db.js';
+import { buildLivingState, shouldNotify } from './state-engine.js';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -71,6 +72,14 @@ assert(
   ).length === 0,
   'Invalid bars must be rejected.',
 );
+
+const baseline=buildLivingState({subject:'AIDEN_SESAME',kind:'SHOPPING',facts:[{subject:'AIDEN_SESAME',kind:'SHOPPING',field:'price',value:399.95,sourceUrl:'https://example.test/aiden',sourceName:'primary-test',quality:'PRIMARY',observedAt:'2026-09-24T20:00:00Z',verifiedAt:'2026-09-24T20:00:00Z'}],previousFacts:null,decision:'WAIT'});
+assert(baseline.changed===true,'Initial verified baseline must establish state.');
+const unchanged=buildLivingState({subject:'AIDEN_SESAME',kind:'SHOPPING',facts:baseline.evidence,previousFacts:baseline.facts,previousDecision:'WAIT'});
+assert(unchanged.changed===false,'Identical verified facts must not manufacture a delta.');
+assert(shouldNotify(unchanged,'WAIT')===false,'Unchanged state must not notify.');
+const discoveryOnly=buildLivingState({subject:'X',kind:'SHOPPING',facts:[{subject:'X',kind:'SHOPPING',field:'price',value:1,sourceUrl:'https://example.test',sourceName:'search-snippet',quality:'DISCOVERY',observedAt:'2026-09-24T20:00:00Z',verifiedAt:'2026-09-24T20:00:00Z'}],previousFacts:null});
+assert(Object.keys(discoveryOnly.facts).length===0,'Discovery-only evidence must not become verified state.');
 
 await initDb();
 
